@@ -1,14 +1,9 @@
 from typing import List, Set
 
 
-class Clause:
-    def __init__(self, literals: Set[int]):
-        self.literals = literals
-
-
 class CNF:
     def __init__(self):
-        self.clauses: List[Clause] = []
+        self.clauses: List[Set[int]] = []
         self.assignments: List[int] = []
 
         self.n_clauses: int = 0
@@ -28,11 +23,11 @@ class CNF:
 
             for line in f.readlines():
                 lits = line.split(" ")[:-1]
-                self.clauses.append(Clause(literals=set(int(lit) for lit in lits)))
+                self.clauses.append(set(int(lit) for lit in lits))
 
     def __deepcopy__(self, memo: dict[int, object]) -> "CNF":
         cnf = CNF()
-        cnf.clauses = [Clause(set(clause.literals)) for clause in self.clauses]
+        cnf.clauses = [set(clause) for clause in self.clauses]
         cnf.assignments = self.assignments.copy()
         cnf.n_clauses = self.n_clauses
         cnf.n_literals = self.n_literals
@@ -42,11 +37,9 @@ class CNF:
     # (clause satisfaction) and all literals -l (unit resolution) are removed.
     #
     def restrict(self, assignment: int) -> None:
-        self.clauses = [
-            clause for clause in self.clauses if assignment not in clause.literals
-        ]
+        self.clauses = [clause for clause in self.clauses if assignment not in clause]
         for clause in self.clauses:
-            clause.literals.discard(-assignment)
+            clause.discard(-assignment)
 
         self.assignments[abs(assignment) - 1] = 1 if assignment > 0 else -1
 
@@ -55,7 +48,7 @@ class CNF:
     def print(self) -> None:
         print(f"p cnf {self.n_literals} {self.n_clauses}")
         for clause in self.clauses:
-            for lit in clause.literals:
+            for lit in clause:
                 print(f"{lit} ", end="")
             print("0")
 

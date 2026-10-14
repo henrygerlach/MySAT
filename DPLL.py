@@ -25,7 +25,7 @@ class DPLL:
             self.resolve_and_propagate_unit_clauses(cnf=cnf)
 
             for clause in cnf.clauses:
-                if not clause.literals:
+                if not clause:
                     return False
 
             self.remove_pure_literals(cnf=cnf)
@@ -35,7 +35,7 @@ class DPLL:
                 return True
 
             x = 0
-            for lit in cnf.clauses[0].literals:
+            for lit in cnf.clauses[0]:
                 x = lit
                 break
             return dpll(copy.deepcopy(cnf), x) or dpll(cnf, -x)
@@ -50,12 +50,12 @@ class DPLL:
     def resolve_and_propagate_unit_clauses(cnf: CNF) -> None:
         while True:
             i = 0
-            while i < len(cnf.clauses) and len(cnf.clauses[i].literals) != 1:
+            while i < len(cnf.clauses) and len(cnf.clauses[i]) != 1:
                 i += 1
 
             if i < len(cnf.clauses):
                 lit = 0
-                for literal in cnf.clauses[i].literals:
+                for literal in cnf.clauses[i]:
                     lit = literal
                     break
                 cnf.restrict(lit)
@@ -69,7 +69,7 @@ class DPLL:
     def remove_pure_literals(cnf: CNF) -> None:
         literals: List[set[int]] = [set() for _ in range(cnf.n_literals + 1)]
         for clause in cnf.clauses:
-            for literal in clause.literals:
+            for literal in clause:
                 literals[abs(literal)].add(literal)
 
         for literal in literals:
