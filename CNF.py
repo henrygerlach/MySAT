@@ -1,10 +1,12 @@
-from typing import List
+from typing import List, Dict
 
 
 class CNF:
     def __init__(self):
         self.clauses: List[List[int]] = []
-        self.satisfied: List[bool] = []
+
+        self.queue: List[int] = []
+        self.watches: Dict[int, List[int]] = dict()
         self.assignments: List[int] = []
         self.trail: List[List[int]] = [[]]
 
@@ -21,45 +23,36 @@ class CNF:
 
             self.n_literals = int(metadata[2])
             self.n_clauses = int(metadata[3])
-            self.satisfied = [False] * self.n_clauses
             self.assignments = [0] * (self.n_literals + 1)
 
             for line in f.readlines():
                 lits = line.split(" ")[:-1]
                 self.clauses.append([int(lit) for lit in lits])
 
-    # Add assignment to global assignment array and trail. And keep track
-    # of satisfied clauses
+        # populate watches
+        for i, clause in enumerate(self.clauses):
+            for lit in clause[:2]:
+                try:
+                    self.watches[lit].append(i)
+                except KeyError:
+                    self.watches[lit] = [i]
+
+    # Add assignment to global assignment array and trail
     #
     def assign(self, lit: int, decision: bool = False) -> None:
         self.assignments[abs(lit)] = 1 if lit > 0 else -1
+        self.queue.append(lit)
 
         if decision:
             self.trail.append([lit])
         else:
             self.trail[-1].append(lit)
 
-        for i, clause in enumerate(self.clauses, 0):
-            if self.satisfied[i]:
-                continue
-
-            if lit in clause:
-                self.satisfied[i] = True
-
-    # Revert assignments of the last decision level and rebuild satisfied
-    # clauses
+    # Revert assignments of the last decision level
     #
     def backtrack(self) -> None:
         for lit in self.trail.pop():
             self.assignments[abs(lit)] = 0
-
-        # rebuild satisfied clauses
-        self.satisfied = [False] * self.n_clauses
-        for i, clause in enumerate(self.clauses):
-            for lit in clause:
-                assignment = self.assignments[abs(lit)]
-                if (assignment > 0 and lit > 0) or (assignment < 0 and lit < 0):
-                    self.satisfied[i] = True
 
     # Return 1 if lit is true, -1 if false and 0 if unassigned
     #
@@ -70,13 +63,9 @@ class CNF:
     # pick the first literal from the first unsatisfied clause
     #
     def pick_unassigned(self) -> int:
-        for i, clause in enumerate(self.clauses):
-            if self.satisfied[i]:
-                continue
-
-            for lit in clause:
-                if not self.assignments[abs(lit)]:
-                    return lit
+        for i, assignment in enumerate(self.assignments[1:], 1):
+            if not assignment:
+                return i
 
         return 0
 

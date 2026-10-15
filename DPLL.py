@@ -17,15 +17,23 @@ class DPLL:
 
     def solve(self) -> str:
 
+        units = [clause[0] for clause in self.cnf.clauses if len(clause) == 1]
+        # if both (l) and -(l) exist, the cnf is UNSAT
+        if any(-u in units for u in units):
+            return "UNSAT"
+        # assign units on decision level 0
+        for unit in units:
+            self.cnf.assign(unit)
+
         def dpll() -> bool:
             if not self.resolve_and_propagate_unit_clauses(cnf=self.cnf):
                 return False
 
-            if all(self.cnf.satisfied):
+            x = self.cnf.pick_unassigned()
+            if not x:
                 self.model = self.cnf.assignments
                 return True
 
-            x = self.cnf.pick_unassigned()
             for lit in [x, -x]:
                 self.cnf.assign(lit, True)
                 if dpll():
@@ -41,22 +49,51 @@ class DPLL:
     #
     @staticmethod
     def resolve_and_propagate_unit_clauses(cnf: CNF) -> bool:
-        changed = True
-        while changed:
-            changed = False
+        while cnf.queue:
+            false_lit = -cnf.queue.pop()
 
-            # find unit clause
-            for i, clause in enumerate(cnf.clauses):
-                if cnf.satisfied[i]:
+            watchers = cnf.watches.get(false_lit, [])
+            i = 0
+            while i < len(watchers):
+                clause = cnf.clauses[watchers[i]]
+
+                if clause[0] == false_lit:
+                    # if c[0] is false_lit, swap it to position 1
+                    clause[0], clause[1] = clause[1], clause[0]
+
+                # case 1: other watched is true, so continue
+                #
+                if cnf.value(clause[0]) == 1:
+                    i += 1
                     continue
 
-                unassigned = [lit for lit in clause if not cnf.value(lit)]
-                if not unassigned:
-                    return False
+                # case 2: search some other non-false literal in clause
+                #
+                for k in range(2, len(clause)):
+                    if cnf.value(clause[k]) != -1:
+                        # swap false lit with non-false
+                        clause[1], clause[k] = clause[k], clause[1]
 
-                if len(unassigned) == 1:
-                    cnf.assign(unassigned[0])
-                    changed = True
+                        # remove clause from lit watch list and add to c[1]'s
+                        # watch list
+                        c = watchers[i]
+                        cnf.watches[clause[k]].remove(c)
+                        try:
+                            cnf.watches[clause[1]].append(c)
+                        except KeyError:
+                            cnf.watches[clause[1]] = [c]
+
+                        break
+
+                # case 3: no replacement found, then either unit clause, when c[0]
+                # is unassigned, or conflict
+                #
+                else:
+                    if cnf.value(clause[0]) == -1:
+                        cnf.queue.clear()
+                        return False
+                    cnf.assign(clause[0])
+                    i += 1
 
         return True
 
