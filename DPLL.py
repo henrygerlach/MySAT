@@ -1,4 +1,3 @@
-import copy
 import sys
 import time
 
@@ -20,27 +19,34 @@ class DPLL:
 
         def dpll(cnf: CNF, x: int | None = None) -> bool:
             if x:
-                cnf.restrict(x)
+                cnf.assign(x, True)
 
             self.resolve_and_propagate_unit_clauses(cnf=cnf)
 
-            for clause in cnf.clauses:
-                if not clause:
+            for i, clause in enumerate(cnf.clauses):
+                if cnf.satisfied[i]:
+                    continue
+
+                assignment_sum = sum(
+                    abs(cnf.assignments[abs(lit) - 1]) for lit in clause
+                )
+
+                if assignment_sum == len(clause):
+                    cnf.backtrack()
                     return False
 
-            self.remove_pure_literals(cnf=cnf)
-
-            if not len(cnf.clauses):
+            if all(cnf.satisfied):
                 self.model = cnf.assignments
                 return True
 
-            x = 0
-            for lit in cnf.clauses[0]:
-                x = lit
-                break
-            return dpll(copy.deepcopy(cnf), x) or dpll(cnf, -x)
+            x = cnf.pick_unassigned()
+            if dpll(cnf, x) or dpll(cnf, -x):
+                return True
 
-        return f"SAT: {self.model}" if dpll(copy.deepcopy(self.cnf)) else "UNSAT"
+            cnf.backtrack()
+            return False
+
+        return f"SAT: {self.model}" if dpll(self.cnf) else "UNSAT"
 
     # If a unit clause exists, its only literal l can only be true, otherwise
     # the formula is UNSAT. Setting l to true may create new unit clauses
@@ -48,33 +54,30 @@ class DPLL:
     #
     @staticmethod
     def resolve_and_propagate_unit_clauses(cnf: CNF) -> None:
-        while True:
-            i = 0
-            while i < len(cnf.clauses) and len(cnf.clauses[i]) != 1:
-                i += 1
+        changed = True
+        while changed:
+            changed = False
 
-            if i < len(cnf.clauses):
-                lit = 0
-                for literal in cnf.clauses[i]:
-                    lit = literal
-                    break
-                cnf.restrict(lit)
-            else:
-                break
+            # find unit clause
+            for i, clause in enumerate(cnf.clauses):
+                # continue if clause is already satisfied
+                if cnf.satisfied[i]:
+                    continue
 
-    # If in a formula a variable x only occurs as x and not as -x, it can be
-    # set to true.
-    #
-    @staticmethod
-    def remove_pure_literals(cnf: CNF) -> None:
-        literals: List[set[int]] = [set() for _ in range(cnf.n_literals + 1)]
-        for clause in cnf.clauses:
-            for literal in clause:
-                literals[abs(literal)].add(literal)
+                # check if unit clause
+                i_unassigned = -1
+                assignment_sum = 0
+                for i, lit in enumerate(clause):
+                    assigned = abs(cnf.assignments[abs(lit) - 1])
+                    assignment_sum += assigned
 
-        for literal in literals:
-            if len(literal) == 1:
-                cnf.restrict(list(literal)[0])
+                    if not assigned:
+                        i_unassigned = i
+
+                # assign l
+                if assignment_sum == len(clause) - 1:
+                    cnf.assign(clause[i_unassigned])
+                    changed = True
 
 
 if __name__ == "__main__":
