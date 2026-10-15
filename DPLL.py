@@ -26,7 +26,7 @@ class DPLL:
             self.cnf.assign(unit)
 
         def dpll() -> bool:
-            if not self.resolve_and_propagate_unit_clauses(cnf=self.cnf):
+            if not self.propagate(cnf=self.cnf):
                 return False
 
             x = self.cnf.pick_unassigned()
@@ -43,12 +43,14 @@ class DPLL:
 
         return f"SAT: {self.model}" if dpll() else "UNSAT"
 
-    # If a unit clause exists, its only literal l can only be true, otherwise
-    # the formula is UNSAT. Setting l to true may create new unit clauses
-    # which are resolved in succession until no unit clause exists anymore.
+    # Two watched literals: watch clause[0] and clause[1] form every clause.
+    # if either gets assigned to be false, an unassigned replacement is
+    # searched. if none exists, its either satisfied (other watched is true),
+    # a unit clause (other watched unassigned) or a conflict (other watched
+    # also false).
     #
     @staticmethod
-    def resolve_and_propagate_unit_clauses(cnf: CNF) -> bool:
+    def propagate(cnf: CNF) -> bool:
         while cnf.queue:
             false_lit = -cnf.queue.pop()
 
@@ -104,4 +106,4 @@ if __name__ == "__main__":
     start = time.time()
     print(dpll.solve())
     end = time.time()
-    print(end - start)
+    print("Solve time:", f"{end - start:>.2}", "sec")
