@@ -22,7 +22,7 @@ class CNF:
             self.n_literals = int(metadata[2])
             self.n_clauses = int(metadata[3])
             self.satisfied = [False] * self.n_clauses
-            self.assignments = [0] * self.n_literals
+            self.assignments = [0] * (self.n_literals + 1)
 
             for line in f.readlines():
                 lits = line.split(" ")[:-1]
@@ -32,7 +32,7 @@ class CNF:
     # of satisfied clauses
     #
     def assign(self, lit: int, decision: bool = False) -> None:
-        self.assignments[abs(lit) - 1] = 1 if lit > 0 else -1
+        self.assignments[abs(lit)] = 1 if lit > 0 else -1
 
         if decision:
             self.trail.append([lit])
@@ -51,20 +51,20 @@ class CNF:
     #
     def backtrack(self) -> None:
         for lit in self.trail.pop():
-            self.assignments[abs(lit) - 1] = 0
+            self.assignments[abs(lit)] = 0
 
         # rebuild satisfied clauses
         self.satisfied = [False] * self.n_clauses
         for i, clause in enumerate(self.clauses):
             for lit in clause:
-                assignment = self.assignments[abs(lit) - 1]
+                assignment = self.assignments[abs(lit)]
                 if (assignment > 0 and lit > 0) or (assignment < 0 and lit < 0):
                     self.satisfied[i] = True
 
     # Return 1 if lit is true, -1 if false and 0 if unassigned
     #
     def value(self, lit: int) -> int:
-        value = self.assignments[abs(lit) - 1]
+        value = self.assignments[abs(lit)]
         return value if lit > 0 else -value
 
     # pick the first literal from the first unsatisfied clause
@@ -75,7 +75,7 @@ class CNF:
                 continue
 
             for lit in clause:
-                if not self.assignments[abs(lit) - 1]:
+                if not self.assignments[abs(lit)]:
                     return lit
 
         return 0
