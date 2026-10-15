@@ -31,35 +31,41 @@ class CNF:
     # Add assignment to global assignment array and trail. And keep track
     # of satisfied clauses
     #
-    def assign(self, assignment: int, decision: bool = False) -> None:
-        self.assignments[abs(assignment) - 1] = 1 if assignment > 0 else -1
+    def assign(self, lit: int, decision: bool = False) -> None:
+        self.assignments[abs(lit) - 1] = 1 if lit > 0 else -1
 
         if decision:
-            self.trail.append([assignment])
+            self.trail.append([lit])
         else:
-            self.trail[-1].append(assignment)
+            self.trail[-1].append(lit)
 
         for i, clause in enumerate(self.clauses, 0):
             if self.satisfied[i]:
                 continue
 
-            if assignment in clause:
+            if lit in clause:
                 self.satisfied[i] = True
 
-    # Revert assignments of the last decision level(s)
+    # Revert assignments of the last decision level and rebuild satisfied
+    # clauses
     #
-    def backtrack(self, levels: int = 1):
-        for _ in range(1, levels + 1):
-            level = self.trail.pop()
-            for assignment in level:
-                self.assignments[abs(assignment) - 1] = 0
+    def backtrack(self) -> None:
+        for lit in self.trail.pop():
+            self.assignments[abs(lit) - 1] = 0
 
+        # rebuild satisfied clauses
         self.satisfied = [False] * self.n_clauses
         for i, clause in enumerate(self.clauses):
             for lit in clause:
                 assignment = self.assignments[abs(lit) - 1]
                 if (assignment > 0 and lit > 0) or (assignment < 0 and lit < 0):
                     self.satisfied[i] = True
+
+    # Return 1 if lit is true, -1 if false and 0 if unassigned
+    #
+    def value(self, lit: int) -> int:
+        value = self.assignments[abs(lit) - 1]
+        return value if lit > 0 else -value
 
     # pick the first literal from the first unsatisfied clause
     #
