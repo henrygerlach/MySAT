@@ -16,7 +16,7 @@ class DPLL:
         self.cnf.read_cnf(path=path)
 
     def solve(self) -> str:
-
+        # resolve all unit clauses, as two watched literals doesnt work on them
         units = [clause[0] for clause in self.cnf.clauses if len(clause) == 1]
         # if both (l) and -(l) exist, the cnf is UNSAT
         if any(-u in units for u in units):

@@ -54,13 +54,14 @@ class CNF:
         for lit in self.trail.pop():
             self.assignments[abs(lit)] = 0
 
-    # Return 1 if lit is true, -1 if false and 0 if unassigned
+    # Evaluate truth value of literal: Return 1 if lit is true, -1 if false
+    # and 0 if unassigned
     #
     def value(self, lit: int) -> int:
         value = self.assignments[abs(lit)]
         return value if lit > 0 else -value
 
-    # pick the first literal from the first unsatisfied clause
+    # Pick literal for branching: the first unassigned literal
     #
     def pick_unassigned(self) -> int:
         for i, assignment in enumerate(self.assignments[1:], 1):
