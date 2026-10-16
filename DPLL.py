@@ -31,7 +31,7 @@ class DPLL:
 
             x = self.cnf.pick()
             if not x:
-                self.model = self.cnf.assignments
+                self.model = self.cnf.assignments[1:]
                 return True
 
             for lit in [x, -x]:

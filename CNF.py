@@ -14,8 +14,9 @@ class CNF:
         self.queue: List[int] = []
         self.watches: Dict[int, List[int]] = dict()
 
-        # VSIDS
+        # VSIDS + Phase saving
         self.heap: Heap
+        self.phase: List[int] = []
 
         # bookkeeping
         self.assignments: List[int] = []
@@ -31,8 +32,11 @@ class CNF:
 
             self.n_literals = int(metadata[2])
             self.n_clauses = int(metadata[3])
+
             self.assignments = [0] * (self.n_literals + 1)
+
             self.heap = Heap(self.n_literals)
+            self.phase = [-1] * (self.n_literals + 1)
 
             for line in f.readlines():
                 lits = line.split(" ")[:-1]
@@ -46,10 +50,15 @@ class CNF:
                 except KeyError:
                     self.watches[lit] = [i]
 
-    # Add assignment to global assignment array and trail
+    # Add assignment to global assignment array and trail, append the lit to
+    # the propagation queue and save the phase for the next decision (phase
+    # saving)
     #
     def assign(self, lit: int, decision: bool = False) -> None:
-        self.assignments[abs(lit)] = 1 if lit > 0 else -1
+        var = abs(lit)
+
+        self.assignments[var] = 1 if lit > 0 else -1
+        self.phase[var] = self.assignments[var]
         self.queue.append(lit)
 
         if decision:
@@ -73,13 +82,14 @@ class CNF:
         value = self.assignments[abs(lit)]
         return value if lit > 0 else -value
 
-    # Pick literal for branching: VSIDS unassigned var with the highest
-    # acivity. See more in Heap.py.
+    # Pick var for branching: VSIDS unassigned var with the highest acivity.
+    # See more in Heap.py. Pick the phase according to the last assignments
+    # phase
     #
     def pick(self) -> int:
         while (var := self.heap.pop()) and self.assignments[var]:
             pass
-        return var
+        return var * self.phase[var]
 
     ##### PRINTING METHODS #####
 
