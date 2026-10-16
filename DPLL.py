@@ -25,23 +25,43 @@ class DPLL:
         for unit in units:
             self.cnf.assign(unit)
 
-        def dpll() -> bool:
-            if not self.propagate(cnf=self.cnf):
-                return False
+        # flipped[i] is True, if the decision on level i + 1 is already the
+        # flipped branch -x. every new decision level appends False to flipped
+        # when the flipped decision is tried it is set to True. On conflict all
+        # already flipped decisions are unmade (backtracking) until a decision
+        # is found, which has its flipped decision still open - trying it. When
+        # the backtrack hits level 0, all branches were tried and thus its
+        # UNSAT.
+        flipped: List[int] = []
+
+        while True:
+            if not self.propagate(self.cnf):
+                # backtrack all already flipped decisions
+                while flipped and flipped[-1]:
+                    self.cnf.backtrack()
+                    flipped.pop()
+
+                # if no flipped decision is too be made -> all branches tried
+                # and conflict -> UNSAT
+                if not flipped:
+                    return "UNSAT"
+
+                # try the flipped branch of the last decision
+                x = self.cnf.trail[-1][0]
+                self.cnf.backtrack()
+                self.cnf.assign(-x, True)
+                flipped[-1] = True
+                continue
 
             x = self.cnf.pick()
+
+            # no unassigned var left -> SAT
             if not x:
                 self.model = self.cnf.assignments[1:]
-                return True
+                return f"SAT: {self.model}"
 
-            for lit in [x, -x]:
-                self.cnf.assign(lit, True)
-                if dpll():
-                    return True
-                self.cnf.backtrack()
-            return False
-
-        return f"SAT: {self.model}" if dpll() else "UNSAT"
+            self.cnf.assign(x, True)
+            flipped.append(False)
 
     # Two watched literals: watch clause[0] and clause[1] form every clause.
     # If either gets assigned to be false, an unassigned replacement is
