@@ -29,7 +29,7 @@ class DPLL:
             if not self.propagate(cnf=self.cnf):
                 return False
 
-            x = self.cnf.pick_unassigned()
+            x = self.cnf.pick()
             if not x:
                 self.model = self.cnf.assignments
                 return True
@@ -93,6 +93,7 @@ class DPLL:
                 else:
                     if cnf.value(clause[0]) == -1:
                         cnf.queue.clear()
+                        cnf.heap.bump(clause)
                         return False
                     cnf.assign(clause[0])
                     i += 1

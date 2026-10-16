@@ -1,17 +1,25 @@
 from typing import List, Dict
 
+from Heap import Heap
+
 
 class CNF:
     def __init__(self):
         self.clauses: List[List[int]] = []
 
-        self.queue: List[int] = []
-        self.watches: Dict[int, List[int]] = dict()
-        self.assignments: List[int] = []
-        self.trail: List[List[int]] = [[]]
-
         self.n_clauses: int = 0
         self.n_literals: int = 0
+
+        # two-watched literals
+        self.queue: List[int] = []
+        self.watches: Dict[int, List[int]] = dict()
+
+        # VSIDS
+        self.heap: Heap
+
+        # bookkeeping
+        self.assignments: List[int] = []
+        self.trail: List[List[int]] = [[]]
 
     def read_cnf(self, path: str) -> None:
         with open(path, "r") as f:
@@ -24,6 +32,7 @@ class CNF:
             self.n_literals = int(metadata[2])
             self.n_clauses = int(metadata[3])
             self.assignments = [0] * (self.n_literals + 1)
+            self.heap = Heap(self.n_literals)
 
             for line in f.readlines():
                 lits = line.split(" ")[:-1]
@@ -54,6 +63,9 @@ class CNF:
         for lit in self.trail.pop():
             self.assignments[abs(lit)] = 0
 
+            # put unassigned vars back into the heap
+            self.heap.insert(abs(lit))
+
     # Evaluate truth value of literal: Return 1 if lit is true, -1 if false
     # and 0 if unassigned
     #
@@ -61,14 +73,13 @@ class CNF:
         value = self.assignments[abs(lit)]
         return value if lit > 0 else -value
 
-    # Pick literal for branching: the first unassigned literal
+    # Pick literal for branching: VSIDS unassigned var with the highest
+    # acivity. See more in Heap.py.
     #
-    def pick_unassigned(self) -> int:
-        for i, assignment in enumerate(self.assignments[1:], 1):
-            if not assignment:
-                return i
-
-        return 0
+    def pick(self) -> int:
+        while (var := self.heap.pop()) and self.assignments[var]:
+            pass
+        return var
 
     ##### PRINTING METHODS #####
 
