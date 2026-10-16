@@ -44,7 +44,7 @@ class DPLL:
         return f"SAT: {self.model}" if dpll() else "UNSAT"
 
     # Two watched literals: watch clause[0] and clause[1] form every clause.
-    # if either gets assigned to be false, an unassigned replacement is
+    # If either gets assigned to be false, an unassigned replacement is
     # searched. if none exists, its either satisfied (other watched is true),
     # a unit clause (other watched unassigned) or a conflict (other watched
     # also false).
