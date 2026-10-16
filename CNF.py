@@ -12,7 +12,7 @@ class CNF:
 
         # two-watched literals
         self.queue: List[int] = []
-        self.watches: Dict[int, List[int]] = dict()
+        self.watches: List[List[int]] = []
 
         # VSIDS + Phase saving
         self.heap: Heap
@@ -43,12 +43,10 @@ class CNF:
                 self.clauses.append([int(lit) for lit in lits])
 
         # populate watches
+        self.watches = [[] for _ in range(2 * self.n_literals + 1)]
         for i, clause in enumerate(self.clauses):
             for lit in clause[:2]:
-                try:
-                    self.watches[lit].append(i)
-                except KeyError:
-                    self.watches[lit] = [i]
+                self.watches[lit + self.n_literals].append(i)
 
     # Add assignment to global assignment array and trail, append the lit to
     # the propagation queue and save the phase for the next decision (phase

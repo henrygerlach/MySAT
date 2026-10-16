@@ -54,7 +54,7 @@ class DPLL:
         while cnf.queue:
             false_lit = -cnf.queue.pop()
 
-            watchers = cnf.watches.get(false_lit, [])
+            watchers = cnf.watches[false_lit + cnf.n_literals]
             i = 0
             while i < len(watchers):
                 clause = cnf.clauses[watchers[i]]
@@ -81,10 +81,7 @@ class DPLL:
                         c = watchers[i]
                         watchers[i] = watchers[-1]
                         watchers.pop()
-                        try:
-                            cnf.watches[clause[1]].append(c)
-                        except KeyError:
-                            cnf.watches[clause[1]] = [c]
+                        cnf.watches[clause[1] + cnf.n_literals].append(c)
 
                         break
 
