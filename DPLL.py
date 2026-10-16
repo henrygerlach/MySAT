@@ -79,7 +79,8 @@ class DPLL:
                         # remove clause from lit watch list and add to c[1]'s
                         # watch list
                         c = watchers[i]
-                        cnf.watches[clause[k]].remove(c)
+                        watchers[i] = watchers[-1]
+                        watchers.pop()
                         try:
                             cnf.watches[clause[1]].append(c)
                         except KeyError:
