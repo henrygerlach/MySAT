@@ -7,13 +7,10 @@ from CNF import CNF
 
 
 class DPLL:
-    def __init__(self):
-        self.cnf: CNF = CNF()
+    def __init__(self, input_path: str):
+        self.cnf: CNF = CNF(input_path)
 
-        self.model: List[int] = []
-
-    def read_cnf(self, path: str) -> None:
-        self.cnf.read_cnf(path=path)
+        self.models: List[List[int]] = []
 
     # Solving a CNF is done by propagating unit clauses and if none exists
     # currently, propagating a variable choosen by VSIDS. If all branches are
@@ -21,6 +18,10 @@ class DPLL:
     # conflict -> SAT.
     #
     def solve(self) -> str:
+        if self.models:
+            self.cnf.add_blocking_clause(self.models[-1])
+            self.cnf.reset()
+
         # resolve all unit clauses, as two watched literals doesnt work on them
         units = [clause[0] for clause in self.cnf.clauses if len(clause) == 1]
         # if both (l) and -(l) exist, the cnf is UNSAT
@@ -62,8 +63,8 @@ class DPLL:
 
             # no unassigned var left -> SAT
             if not x:
-                self.model = self.cnf.assignments[1:]
-                return f"SAT: {self.model}"
+                self.models.append(self.cnf.assignments[1:])
+                return "SAT"
 
             self.cnf.assign(x, True)
             flipped.append(False)
@@ -125,8 +126,13 @@ class DPLL:
 
 
 if __name__ == "__main__":
-    dpll = DPLL()
-    dpll.read_cnf(sys.argv[1])
+    dpll = DPLL(sys.argv[1])
+
+    start = time.time()
+    print(dpll.solve())
+    end = time.time()
+    print("Solve time:", f"{end - start:>.2}", "sec")
+
     start = time.time()
     print(dpll.solve())
     end = time.time()

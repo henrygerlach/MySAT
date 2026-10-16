@@ -4,7 +4,7 @@ from Heap import Heap
 
 
 class CNF:
-    def __init__(self):
+    def __init__(self, input_path: str) -> None:
         self.clauses: List[List[int]] = []
 
         self.n_clauses: int = 0
@@ -22,6 +22,9 @@ class CNF:
         self.assignments: List[int] = []
         self.trail: List[List[int]] = [[]]
 
+        self.read_cnf(input_path)
+        self.reset()
+
     def read_cnf(self, path: str) -> None:
         with open(path, "r") as f:
             line = f.readline()
@@ -33,18 +36,22 @@ class CNF:
             self.n_literals = int(metadata[2])
             self.n_clauses = int(metadata[3])
 
-            self.assignments = [0] * (self.n_literals + 1)
-
-            self.heap = Heap(self.n_literals)
-            self.phase = [-1] * (self.n_literals + 1)
-
             for line in f.readlines():
                 lits = line.split(" ")[:-1]
                 self.clauses.append([int(lit) for lit in lits])
 
-        self.heap.seed(self.clauses)
+    # Reset the search state, for initialization or to prepare for the search
+    # of another model
+    #
+    def reset(self) -> None:
+        self.assignments = [0] * (self.n_literals + 1)
+        self.trail = [[]]
 
-        # populate watches
+        self.heap = Heap(self.n_literals)
+        self.heap.seed(self.clauses)
+        self.phase = [-1] * (self.n_literals + 1)
+
+        self.queue = []
         self.watches = [[] for _ in range(2 * self.n_literals + 1)]
         for i, clause in enumerate(self.clauses):
             for lit in clause[:2]:
@@ -90,6 +97,13 @@ class CNF:
         while (var := self.heap.pop()) and self.assignments[var]:
             pass
         return var * self.phase[var]
+
+    # Add blocking clause to prepare for the search of another model
+    #
+    def add_blocking_clause(self, model: List[int]) -> None:
+        blocking_clause: List[int] = [-lit for lit in model]
+        self.clauses.append(blocking_clause)
+        self.n_clauses += 1
 
     ##### PRINTING METHODS #####
 
