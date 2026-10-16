@@ -49,6 +49,12 @@ class Heap:
             if self.pos[var] != -1:
                 self.sift_up(self.pos[var])
 
+            # prevent overflow of activity score into inf, by downscaling
+            # everything
+            if self.activity[var] > 1e100:
+                self.activity = [a * 1e-100 for a in self.activity]
+                self.inc *= 1e-100
+
         self.inc /= 0.95
 
     def sift_up(self, i: int) -> None:
