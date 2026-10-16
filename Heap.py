@@ -15,6 +15,16 @@ class Heap:
         self.size: int = n_vars
         self.inc: float = 1.0
 
+    # Seed activities with the number of occurrences of each var
+    #
+    def seed(self, clauses: List[List[int]]) -> None:
+        for clause in clauses:
+            for lit in clause:
+                self.activity[abs(lit)] += 1.0
+
+        for i in range(self.size // 2 - 1, -1, -1):
+            self.sift_down(i)
+
     def parent(self, i: int) -> int:
         return (i - 1) // 2
 

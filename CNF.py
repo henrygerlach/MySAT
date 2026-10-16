@@ -1,4 +1,4 @@
-from typing import List, Dict
+from typing import List
 
 from Heap import Heap
 
@@ -41,6 +41,8 @@ class CNF:
             for line in f.readlines():
                 lits = line.split(" ")[:-1]
                 self.clauses.append([int(lit) for lit in lits])
+
+        self.heap.seed(self.clauses)
 
         # populate watches
         self.watches = [[] for _ in range(2 * self.n_literals + 1)]
