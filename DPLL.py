@@ -15,6 +15,11 @@ class DPLL:
     def read_cnf(self, path: str) -> None:
         self.cnf.read_cnf(path=path)
 
+    # Solving a CNF is done by propagating unit clauses and if none exists
+    # currently, propagating a variable choosen by VSIDS. If all branches are
+    # tried without succes -> UNSAT. If all variables are assigned without
+    # conflict -> SAT.
+    #
     def solve(self) -> str:
         # resolve all unit clauses, as two watched literals doesnt work on them
         units = [clause[0] for clause in self.cnf.clauses if len(clause) == 1]

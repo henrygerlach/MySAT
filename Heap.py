@@ -47,9 +47,15 @@ class Heap:
         self.sift_up(self.pos[var])
 
     def swap(self, i: int, j: int) -> None:
+        # swap in heap and update position pointers
         self.heap[i], self.heap[j] = self.heap[j], self.heap[i]
         self.pos[self.heap[i]], self.pos[self.heap[j]] = i, j
 
+    # On conflict in propagation, add self.inc to each of the involved clauses
+    # literals. If the activity score gets close to inf, every activity score
+    # is downscaled. self.inc is increased by approx 5%, such that recent
+    # conflicts have more impact on the score (decay).
+    #
     def bump(self, clause: List[int]) -> None:
         for lit in clause:
             var = abs(lit)
@@ -67,6 +73,9 @@ class Heap:
 
         self.inc /= 0.95
 
+    # Sifting self.heap[i] up in the heap, by swapping it with its parent if its
+    # larger than it iteratively, until its parent is larger.
+    #
     def sift_up(self, i: int) -> None:
         while i > 0:
             parent = self.parent(i)
@@ -79,6 +88,10 @@ class Heap:
             self.swap(i, parent)
             i = parent
 
+    # Sifting self.heap[i] down in the heap, by swapping it with its left or
+    # right child, depending on which is largest. Stopping when its larger
+    # than its children.
+    #
     def sift_down(self, i: int) -> None:
         while True:
             left = self.left(i)
@@ -107,10 +120,14 @@ class Heap:
             self.swap(i, largest)
             i = largest
 
+    # Pop the largest element of the heap (top), by swapping it with the
+    # bottom one, popping it and sifting the bottom now top one down again.
+    #
     def pop(self) -> int:
         if not self.heap:
             return 0
 
+        # swapping top and bottom. then popping top now bottom one
         top = self.heap[0]
         bottom = self.heap.pop()
         self.size -= 1
