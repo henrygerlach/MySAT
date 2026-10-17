@@ -3,7 +3,7 @@ import time
 
 from typing import List
 
-from CNF import CNF
+from dpll.CNF import CNF
 
 
 class DPLL:

@@ -1,6 +1,6 @@
 from typing import List
 
-from Heap import Heap
+from dpll.Heap import Heap
 
 
 class CNF:
