@@ -12,25 +12,6 @@ class DPLL:
 
         self.models: List[List[int]] = []
 
-    # Solving a CNF is done by propagating unit clauses and if none exists
-    # currently, propagating a variable choosen by VSIDS. If all branches are
-    # tried without succes -> UNSAT. If all variables are assigned without
-    # conflict -> SAT.
-    #
-    def solve(self) -> str:
-        if self.models:
-            self.cnf.add_blocking_clause(self.models[-1])
-            self.cnf.reset()
-
-        # resolve all unit clauses, as two watched literals doesnt work on them
-        units = [clause[0] for clause in self.cnf.clauses if len(clause) == 1]
-        # if both (l) and -(l) exist, the cnf is UNSAT
-        if any(-u in units for u in units):
-            return "UNSAT"
-        # assign units on decision level 0
-        for unit in units:
-            self.cnf.assign(unit)
-
         # flipped[i] is True, if the decision on level i + 1 is already the
         # flipped branch -x. every new decision level appends False to flipped
         # when the flipped decision is tried it is set to True. On conflict all
@@ -38,25 +19,34 @@ class DPLL:
         # is found, which has its flipped decision still open - trying it. When
         # the backtrack hits level 0, all branches were tried and thus its
         # UNSAT.
-        flipped: List[int] = []
+        self.flipped: List[bool] = []
+
+    # Solving a CNF is done by propagating unit clauses and if none exists
+    # currently, propagating a variable choosen by VSIDS. If all branches are
+    # tried without succes -> UNSAT. If all variables are assigned without
+    # conflict -> SAT.
+    #
+    def solve(self) -> str:
+        if not self.models:
+            # resolve all unit clauses, as two watched literals doesnt work on them
+            units = [clause[0] for clause in self.cnf.clauses if len(clause) == 1]
+            # if both (l) and -(l) exist, the cnf is UNSAT
+            if any(-u in units for u in units):
+                return "UNSAT"
+            # assign units on decision level 0
+            for unit in units:
+                self.cnf.assign(unit)
+
+        # if models where found before, and another solve comes in to find
+        # another model. Handle the satisfying branch as conflict and search
+        # another branch.
+        elif not self.next_branch():
+            return "UNSAT"
 
         while True:
             if not self.propagate(self.cnf):
-                # backtrack all already flipped decisions
-                while flipped and flipped[-1]:
-                    self.cnf.backtrack()
-                    flipped.pop()
-
-                # if no flipped decision is too be made -> all branches tried
-                # and conflict -> UNSAT
-                if not flipped:
+                if not self.next_branch():
                     return "UNSAT"
-
-                # try the flipped branch of the last decision
-                x = self.cnf.trail[-1][0]
-                self.cnf.backtrack()
-                self.cnf.assign(-x, True)
-                flipped[-1] = True
                 continue
 
             x = self.cnf.pick()
@@ -67,7 +57,7 @@ class DPLL:
                 return "SAT"
 
             self.cnf.assign(x, True)
-            flipped.append(False)
+            self.flipped.append(False)
 
     # Two watched literals: watch clause[0] and clause[1] form every clause.
     # If either gets assigned to be false, an unassigned replacement is
@@ -124,16 +114,38 @@ class DPLL:
 
         return True
 
+    # Backtrack all already flipped decisions and flip latest not yet flipped
+    # decision
+    def next_branch(self) -> bool:
+        while self.flipped and self.flipped[-1]:
+            self.cnf.backtrack()
+            self.flipped.pop()
+
+        # if no flipped decision is too be made -> all branches tried
+        # and conflict -> UNSAT
+        if not self.flipped:
+            return False
+
+        # try the flipped branch of the last decision
+        x = self.cnf.trail[-1][0]
+        self.cnf.backtrack()
+        self.cnf.assign(-x, True)
+        self.flipped[-1] = True
+        return True
+
 
 if __name__ == "__main__":
     dpll = DPLL(sys.argv[1])
 
-    start = time.time()
-    print(dpll.solve())
-    end = time.time()
-    print("Solve time:", f"{end - start:>.2}", "sec")
+    solves = 100
+    total_time = 0.0
 
-    start = time.time()
-    print(dpll.solve())
-    end = time.time()
-    print("Solve time:", f"{end - start:>.2}", "sec")
+    f = open(sys.argv[2], "w")
+    f.write("N, Time (s), Total Time (s)\n")
+    for i in range(1, solves + 1):
+        start = time.time()
+        ret = dpll.solve()
+        end = time.time()
+        solve_time = end - start
+        total_time += solve_time
+        f.write(f"{i}, {solve_time:>.2}, {total_time:>.2}\n")
