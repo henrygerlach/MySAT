@@ -101,12 +101,13 @@ class CNF:
 
     # Revert assignments of the last decision level
     #
-    def backtrack(self) -> None:
-        for lit in self.trail.pop():
-            self.assignments[abs(lit)] = 0
+    def backtrack(self, to_level: int) -> None:
+        while len(self.trail) - 1 > to_level:
+            for lit in self.trail.pop():
+                self.assignments[abs(lit)] = 0
 
-            # put unassigned vars back into the heap
-            self.heap.insert(abs(lit))
+                # put unassigned vars back into the heap
+                self.heap.insert(abs(lit))
 
     # Evaluate truth value of literal: Return 1 if lit is true, -1 if false
     # and 0 if unassigned

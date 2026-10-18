@@ -41,7 +41,7 @@ class MySAT:
                 if len(self.cnf.trail) == 1:
                     return "UNSAT"
                 learned, to_level = self.analyze(conflict)
-                self.backtrack(to_level)
+                self.cnf.backtrack(to_level)
                 self.cnf.add_clause(learned)
                 self.cnf.assign(learned[0], reason=self.cnf.n_clauses - 1)
                 continue
@@ -54,10 +54,6 @@ class MySAT:
                 return "SAT"
 
             self.cnf.assign(x, True)
-
-    def backtrack(self, to_level: int) -> None:
-        while len(self.cnf.trail) - 1 > to_level:
-            self.cnf.backtrack()
 
     def analyze(self, conflict: int) -> Tuple[List[int], int]:
         conflict_clause = self.cnf.clauses[conflict]
@@ -183,7 +179,7 @@ class MySAT:
         if not blocking:
             return False
 
-        self.backtrack(len(self.cnf.trail) - 2)
+        self.cnf.backtrack(len(self.cnf.trail) - 2)
         self.cnf.add_clause(blocking)
 
         # switching the latest decision
