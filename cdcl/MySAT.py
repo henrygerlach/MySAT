@@ -59,9 +59,12 @@ class MySAT:
 
             self.cnf.assign(x, True)
 
+    # Propagte unit clauses until none is left or a conflict (all literals in
+    # a clause evalutate to false) is found.
+    #
     # Two watched literals: watch clause[0] and clause[1] form every clause.
     # If either gets assigned to be false, an unassigned replacement is
-    # searched. if none exists, its either satisfied (other watched is true),
+    # searched. If none exists, its either satisfied (other watched is true),
     # a unit clause (other watched unassigned) or a conflict (other watched
     # also false).
     #
@@ -74,8 +77,8 @@ class MySAT:
             while i < len(watchers):
                 clause = self.cnf.clauses[watchers[i]]
 
+                # if c[0] is false_lit, swap it to position 1
                 if clause[0] == false_lit:
-                    # if c[0] is false_lit, swap it to position 1
                     clause[0], clause[1] = clause[1], clause[0]
 
                 # case 1: other watched is true, so continue
@@ -114,89 +117,89 @@ class MySAT:
         return -1
 
     # On conflict, find learned clause to prevent the same conflict from
-    # occuring again. This is achieved by recursivly replacing literals
-    # assigned on the current decision level with their reason clause
-    # (excluding the literal itself), the clause that forced them, until only
-    # on literal in the new clause was assigned on the current level. This
-    # literal is the first UIP (unique implication point). Every assignment
-    # between the decision and the conflict has an assignment path including
-    # this literal. Backjumping then to the next highest decision level a
-    # literal of the learned clause was assigned, makes the learned clause
-    # instantly unit, forcing a new decision space.
+    # occuring again.
     #
     def analyze(self, conflict: int) -> Tuple[List[int], int]:
-        conflict_clause = self.cnf.clauses[conflict]
-        learned_clause: List[int] = conflict_clause.copy()
+        cur_level = len(self.cnf.trail) - 1
+        seen: List[bool] = [False] * (self.cnf.n_literals + 1)
+
+        learned: List[int] = [0]
+        counter = 0
+        clause: List[int] = self.cnf.clauses[conflict]
+        i = len(self.cnf.trail[-1])
 
         while True:
-            # find and count literals of the learned clause assigned on
-            # current decision level
-            n_literals = 0
-            replacement_literals: List[int] = []
-            for lit in self.cnf.trail[-1]:
-                if -lit in learned_clause:
-                    replacement_literals.append(lit)
-                    n_literals += 1
+            # Step 1: Take the literals of clause (initially conflict clause)
+            #
+            for lit in clause:
+                var = abs(lit)
 
-            # if only one literal remains -> first UIP -> learned clause found
-            if n_literals == 1:
-                if len(learned_clause) > 1:
-                    i = -1
-                    highest_level = -1
-                    for j, lit in enumerate(learned_clause):
-                        if lit == -replacement_literals[0]:
-                            continue
-                        level = self.cnf.level[abs(lit)]
-                        if level > highest_level:
-                            i = j
-                            highest_level = level
-                    learned_clause[i], learned_clause[1] = (
-                        learned_clause[1],
-                        learned_clause[i],
-                    )
-                    k = learned_clause.index(-replacement_literals[0])
-                    learned_clause[k], learned_clause[0] = (
-                        learned_clause[0],
-                        learned_clause[k],
-                    )
+                # if already seen, continue. else set to seen
+                if seen[var]:
+                    continue
+                seen[var] = True
+
+                # when lit on cur_level then increment counter, else append to
+                # learned clause (the lit is already final for the learned
+                # clause)
+                if self.cnf.level[var] == cur_level:
+                    counter += 1
+                elif self.cnf.level[var] > 0:
+                    learned.append(lit)
+
+            # Step 2: Find next literal to resolve, by walking the trail from
+            # back to front, restarting the search at the last resolved
+            # literal and looking for the next literal that is marked seen
+            #
+            i -= 1
+            while not seen[abs(self.cnf.trail[cur_level][i])]:
+                i -= 1
+
+            pending = self.cnf.trail[cur_level][i]
+            counter -= 1
+
+            # Step 3: Is pending the only literal left? If yes, pending is the
+            # first UIP
+            #
+            if not counter:
                 break
 
-            # resolve literals with their reason clauses until learned_clause
-            # contains only one literal from current decision level
-            while n_literals > 1:
-                replacement_literal = replacement_literals.pop()
-                reason: int = self.cnf.reason[abs(replacement_literal)]  # type: ignore
+            # Step 4: Set the reason clause of pending to the next clause to
+            # resolve
+            reason = self.cnf.reason[abs(pending)]
+            clause = self.cnf.clauses[reason if reason else 0]
 
-                reason_clause = self.cnf.clauses[reason].copy()
-                reason_clause.remove(replacement_literal)
-                learned_clause.remove(-replacement_literal)
-                learned_clause.extend(reason_clause)
-                n_literals -= 1
+        # setting learned[0] to negated first UIP
+        learned[0] = -pending
 
-                # remove duplicates
-                learned_clause = list(set(learned_clause))
+        # if learned clause is unit, it should backtrack to level 0
+        if len(learned) == 1:
+            return learned, 0
 
-        return learned_clause, self.cnf.level[abs(learned_clause[1])] if len(
-            learned_clause
-        ) > 1 else 0
+        # swap the literal with the second highest assignment level to
+        # position 1
+        i_max = learned.index(max(learned[1:], key=lambda x: self.cnf.level[abs(x)]))
+        learned[1], learned[i_max] = learned[i_max], learned[1]
+        return learned, self.cnf.level[abs(learned[1])]
 
     # If models already found, add blocking clause blocking all decisions made
-    # on the way towards the model, forcing new decisions. By backtracking on
-    # level and reassigning the latest negated decision, we force a new search
-    # space directly.
+    # on the way towards the model, forcing new decisions.
     #
     def block_model(self) -> bool:
+        # create blocking clause from the negated decision that lead to the
+        # last model
         blocking = [
             -self.cnf.trail[level][0] for level in range(len(self.cnf.trail) - 1, 0, -1)
         ]
 
+        # model was found on level 0, thus there is no other model
         if not blocking:
             return False
 
+        # backtrack one level, add the blocking clause and assign the first
+        # literal with its negated latest decision to force a new search space
         self.cnf.backtrack(len(self.cnf.trail) - 2)
         self.cnf.add_clause(blocking)
-
-        # switching the latest decision
         if len(blocking) > 1:
             self.cnf.assign(blocking[0], reason=self.cnf.n_clauses - 1)
 
