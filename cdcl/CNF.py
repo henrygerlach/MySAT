@@ -24,6 +24,10 @@ class CNF:
         self.reason: List[int | None] = []
         self.level: List[int] = []
 
+        # global seen list for analyze method, such that it is not
+        # reinstantiated every conflict
+        seen: List[bool] = []  # type: ignore  # noqa: F841
+
         self.read_cnf(input_path)
         self.reset()
 
@@ -48,9 +52,9 @@ class CNF:
     def reset(self) -> None:
         self.assignments = [0] * (2 * self.n_literals + 1)
         self.trail = [[]]
-
         self.reason = [-1] * (self.n_literals + 1)
         self.level = [-1] * (self.n_literals + 1)
+        self.seen = [False] * (self.n_literals + 1)
 
         self.heap = Heap(self.n_literals)
         self.heap.seed(self.clauses)
@@ -95,7 +99,6 @@ class CNF:
         self.assignments[-var] = -value
 
         self.level[var] = level if level != -1 else len(self.trail) - 1
-
         self.reason[var] = reason
 
         self.phase[var] = self.assignments[var]

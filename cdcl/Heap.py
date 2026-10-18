@@ -51,26 +51,28 @@ class Heap:
         self.heap[i], self.heap[j] = self.heap[j], self.heap[i]
         self.pos[self.heap[i]], self.pos[self.heap[j]] = i, j
 
-    # On conflict in propagation, add self.inc to each of the involved clauses
-    # literals. If the activity score gets close to inf, every activity score
-    # is downscaled. self.inc is increased by approx 5%, such that recent
+    # On conflict in propagation, add self.inc to each of the involved literals
+    # in conflict analysis. If the activity score gets close to inf, every
+    # activity score is downscaled.
+    #
+    def bump(self, lit: int) -> None:
+        var = abs(lit)
+        self.activity[var] += self.inc
+
+        # only if var in heap, sift it up
+        if self.pos[var] != -1:
+            self.sift_up(self.pos[var])
+
+        # prevent overflow of activity score into inf, by downscaling
+        # everything
+        if self.activity[var] > 1e100:
+            self.activity = [a * 1e-100 for a in self.activity]
+            self.inc *= 1e-100
+
+    # self.inc is increased by approx 5%, such that recent
     # conflicts have more impact on the score (decay).
     #
-    def bump(self, clause: List[int]) -> None:
-        for lit in clause:
-            var = abs(lit)
-            self.activity[var] += self.inc
-
-            # only if var in heap, sift it up
-            if self.pos[var] != -1:
-                self.sift_up(self.pos[var])
-
-            # prevent overflow of activity score into inf, by downscaling
-            # everything
-            if self.activity[var] > 1e100:
-                self.activity = [a * 1e-100 for a in self.activity]
-                self.inc *= 1e-100
-
+    def decay(self) -> None:
         self.inc /= 0.95
 
     # Sifting self.heap[i] up in the heap, by swapping it with its parent if its

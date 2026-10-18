@@ -11,6 +11,7 @@ class MySAT:
         self.cnf: CNF = CNF(input_path)
 
         self.models: List[List[int]] = []
+        self.ret: str | None = None
 
     # Solving a CNF is done by propagating unit clauses and if none exists
     # currently, propagating a variable choosen by VSIDS. On conflict add a
@@ -19,15 +20,17 @@ class MySAT:
     # assigned without conflict -> SAT.
     #
     def solve(self) -> str:
-        if not self.models:
+        cnf = self.cnf
+
+        if self.ret != "UNSAT":
             # resolve all unit clauses, as two watched literals doesnt work on them
-            units = [clause[0] for clause in self.cnf.clauses if len(clause) == 1]
+            units = set(clause[0] for clause in cnf.clauses if len(clause) == 1)
             # if both (l) and -(l) exist, the cnf is UNSAT
             if any(-u in units for u in units):
                 return "UNSAT"
             # assign units on decision level 0
             for unit in units:
-                self.cnf.assign(unit)
+                cnf.assign(unit)
 
         # add blocking clause to block same model to be found again
         elif not self.block_model():
@@ -41,23 +44,25 @@ class MySAT:
             # backjump, add learned clause and assign first UIP, to enter new
             # search space
             if conflict >= 0:
-                if len(self.cnf.trail) == 1:
+                if len(cnf.trail) == 1:
+                    self.ret = "UNSAT"
                     return "UNSAT"
                 learned, to_level = self.analyze(conflict)
-                self.cnf.backtrack(to_level)
-                self.cnf.add_clause(learned)
-                self.cnf.assign(learned[0], reason=self.cnf.n_clauses - 1)
+                cnf.backtrack(to_level)
+                cnf.add_clause(learned)
+                if len(learned) > 1:
+                    cnf.assign(learned[0], reason=cnf.n_clauses - 1)
                 continue
 
             # pick var using VSIDS and phase saving
-            x = self.cnf.pick()
+            x = cnf.pick()
 
             # no unassigned var left -> SAT
             if not x:
-                self.models.append(self.cnf.assignments[1 : self.cnf.n_literals + 1])
+                self.models.append(cnf.assignments[1 : cnf.n_literals + 1])
                 return "SAT"
 
-            self.cnf.assign(x, True)
+            cnf.assign(x, True)
 
     # Propagte unit clauses until none is left or a conflict (all literals in
     # a clause evalutate to false) is found.
@@ -69,13 +74,15 @@ class MySAT:
     # also false).
     #
     def propagate(self) -> int:
-        while self.cnf.queue:
-            false_lit = -self.cnf.queue.pop()
+        cnf = self.cnf
 
-            watchers = self.cnf.watches[false_lit + self.cnf.n_literals]
+        while cnf.queue:
+            false_lit = -cnf.queue.pop()
+
+            watchers = cnf.watches[false_lit + cnf.n_literals]
             i = 0
             while i < len(watchers):
-                clause = self.cnf.clauses[watchers[i]]
+                clause = cnf.clauses[watchers[i]]
 
                 # if c[0] is false_lit, swap it to position 1
                 if clause[0] == false_lit:
@@ -83,14 +90,14 @@ class MySAT:
 
                 # case 1: other watched is true, so continue
                 #
-                if self.cnf.assignments[clause[0]] == 1:
+                if cnf.assignments[clause[0]] == 1:
                     i += 1
                     continue
 
                 # case 2: search some other non-false literal in clause
                 #
                 for k in range(2, len(clause)):
-                    if self.cnf.assignments[clause[k]] != -1:
+                    if cnf.assignments[clause[k]] != -1:
                         # swap false lit with non-false
                         clause[1], clause[k] = clause[k], clause[1]
 
@@ -99,7 +106,7 @@ class MySAT:
                         c = watchers[i]
                         watchers[i] = watchers[-1]
                         watchers.pop()
-                        self.cnf.watches[clause[1] + self.cnf.n_literals].append(c)
+                        cnf.watches[clause[1] + cnf.n_literals].append(c)
 
                         break
 
@@ -107,11 +114,10 @@ class MySAT:
                 # is unassigned, or conflict
                 #
                 else:
-                    if self.cnf.assignments[clause[0]] == -1:
-                        self.cnf.queue.clear()
-                        self.cnf.heap.bump(clause)
+                    if cnf.assignments[clause[0]] == -1:
+                        cnf.queue.clear()
                         return watchers[i]
-                    self.cnf.assign(clause[0], reason=watchers[i])
+                    cnf.assign(clause[0], reason=watchers[i])
                     i += 1
 
         return -1
@@ -120,13 +126,16 @@ class MySAT:
     # occuring again.
     #
     def analyze(self, conflict: int) -> Tuple[List[int], int]:
-        cur_level = len(self.cnf.trail) - 1
-        seen: List[bool] = [False] * (self.cnf.n_literals + 1)
+        cnf = self.cnf
+        cur_level = len(cnf.trail) - 1
+
+        seen = cnf.seen
+        marked: List[int] = []
 
         learned: List[int] = [0]
         counter = 0
-        clause: List[int] = self.cnf.clauses[conflict]
-        i = len(self.cnf.trail[-1])
+        clause: List[int] = cnf.clauses[conflict]
+        i = len(cnf.trail[-1])
 
         while True:
             # Step 1: Take the literals of clause (initially conflict clause)
@@ -138,13 +147,15 @@ class MySAT:
                 if seen[var]:
                     continue
                 seen[var] = True
+                marked.append(var)
+                cnf.heap.bump(lit)
 
                 # when lit on cur_level then increment counter, else append to
                 # learned clause (the lit is already final for the learned
                 # clause)
-                if self.cnf.level[var] == cur_level:
+                if cnf.level[var] == cur_level:
                     counter += 1
-                elif self.cnf.level[var] > 0:
+                elif cnf.level[var] > 0:
                     learned.append(lit)
 
             # Step 2: Find next literal to resolve, by walking the trail from
@@ -152,10 +163,10 @@ class MySAT:
             # literal and looking for the next literal that is marked seen
             #
             i -= 1
-            while not seen[abs(self.cnf.trail[cur_level][i])]:
+            while not seen[abs(cnf.trail[cur_level][i])]:
                 i -= 1
 
-            pending = self.cnf.trail[cur_level][i]
+            pending = cnf.trail[cur_level][i]
             counter -= 1
 
             # Step 3: Is pending the only literal left? If yes, pending is the
@@ -166,8 +177,11 @@ class MySAT:
 
             # Step 4: Set the reason clause of pending to the next clause to
             # resolve
-            reason = self.cnf.reason[abs(pending)]
-            clause = self.cnf.clauses[reason if reason else 0]
+            reason = cnf.reason[abs(pending)]
+            clause = cnf.clauses[reason if reason else 0]
+
+        # decay VSIDS activity scores once per conflict
+        cnf.heap.decay()
 
         # setting learned[0] to negated first UIP
         learned[0] = -pending
@@ -178,19 +192,30 @@ class MySAT:
 
         # swap the literal with the second highest assignment level to
         # position 1
-        i_max = learned.index(max(learned[1:], key=lambda x: self.cnf.level[abs(x)]))
+        i_max = 0
+        level_max = -1
+        for i, lit in enumerate(learned[1:], 1):
+            level = cnf.level[abs(lit)]
+            if level > level_max:
+                i_max = i
+                level_max = level
         learned[1], learned[i_max] = learned[i_max], learned[1]
-        return learned, self.cnf.level[abs(learned[1])]
+
+        # unmark all seen variables for next analyze run
+        for var in marked:
+            seen[var] = False
+
+        return learned, cnf.level[abs(learned[1])]
 
     # If models already found, add blocking clause blocking all decisions made
     # on the way towards the model, forcing new decisions.
     #
     def block_model(self) -> bool:
+        cnf = self.cnf
+
         # create blocking clause from the negated decision that lead to the
         # last model
-        blocking = [
-            -self.cnf.trail[level][0] for level in range(len(self.cnf.trail) - 1, 0, -1)
-        ]
+        blocking = [-cnf.trail[level][0] for level in range(len(cnf.trail) - 1, 0, -1)]
 
         # model was found on level 0, thus there is no other model
         if not blocking:
@@ -198,10 +223,10 @@ class MySAT:
 
         # backtrack one level, add the blocking clause and assign the first
         # literal with its negated latest decision to force a new search space
-        self.cnf.backtrack(len(self.cnf.trail) - 2)
-        self.cnf.add_clause(blocking)
+        cnf.backtrack(len(cnf.trail) - 2)
+        cnf.add_clause(blocking)
         if len(blocking) > 1:
-            self.cnf.assign(blocking[0], reason=self.cnf.n_clauses - 1)
+            cnf.assign(blocking[0], reason=cnf.n_clauses - 1)
 
         return True
 
@@ -215,9 +240,11 @@ if __name__ == "__main__":
     f = open(sys.argv[2], "w")
     f.write("N, Status, Time (s), Total Time (s)\n")
     for i in range(1, solves + 1):
-        start = time.time()
+        start = time.perf_counter()
         ret = mysat.solve()
-        end = time.time()
+        end = time.perf_counter()
         solve_time = end - start
         total_time += solve_time
         f.write(f"{i}, {ret}, {solve_time:>.2}, {total_time:>.2}\n")
+
+    f.close()
