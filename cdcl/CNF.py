@@ -21,7 +21,6 @@ class CNF:
         # bookkeeping
         self.assignments: List[int] = []
         self.trail: List[List[int]] = [[]]
-        self.decision_level: int = 0
         self.reason: List[int | None] = []
         self.level: List[int] = []
 
@@ -90,7 +89,6 @@ class CNF:
             self.trail.append([lit])
         else:
             self.trail[level].append(lit)
-            self.decision_level += 1
 
         self.assignments[var] = 1 if lit > 0 else -1
         self.level[var] = level if level != -1 else len(self.trail) - 1

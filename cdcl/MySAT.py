@@ -40,7 +40,7 @@ class MySAT:
         # if models where found before, and another solve comes in to find
         # another model. Handle the satisfying branch as conflict and search
         # another branch.
-        elif not self.next_branch():
+        elif not self.block_model():
             return "UNSAT"
 
         while True:
@@ -181,30 +181,33 @@ class MySAT:
 
         return -1
 
-    # Backtrack all already flipped decisions and flip latest not yet flipped
-    # decision
-    def next_branch(self) -> bool:
-        while self.flipped and self.flipped[-1]:
-            self.cnf.backtrack()
-            self.flipped.pop()
+    # If models already found, add blocking clause blocking all decisions made
+    # on the way towards the model, forcing new decisions. By backtracking on
+    # level and reassigning the latest negated decision, we force a new search
+    # space directly.
+    #
+    def block_model(self) -> bool:
+        blocking = [
+            -self.cnf.trail[level][0] for level in range(len(self.cnf.trail) - 1, 0, -1)
+        ]
 
-        # if no flipped decision is too be made -> all branches tried
-        # and conflict -> UNSAT
-        if not self.flipped:
+        if not blocking:
             return False
 
-        # try the flipped branch of the last decision
-        x = self.cnf.trail[-1][0]
-        self.cnf.backtrack()
-        self.cnf.assign(-x, True)
-        self.flipped[-1] = True
+        self.backtrack(len(self.cnf.trail) - 2)
+        self.cnf.add_clause(blocking)
+
+        # switching the latest decision
+        if len(blocking) > 1:
+            self.cnf.assign(blocking[0], reason=self.cnf.n_clauses - 1)
+
         return True
 
 
 if __name__ == "__main__":
     mysat = MySAT(sys.argv[1])
 
-    solves = 1
+    solves = 3
     total_time = 0.0
 
     f = open(sys.argv[2], "w")
