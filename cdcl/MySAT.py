@@ -12,15 +12,6 @@ class MySAT:
 
         self.models: List[List[int]] = []
 
-        # flipped[i] is True, if the decision on level i + 1 is already the
-        # flipped branch -x. every new decision level appends False to flipped
-        # when the flipped decision is tried it is set to True. On conflict all
-        # already flipped decisions are unmade (backtracking) until a decision
-        # is found, which has its flipped decision still open - trying it. When
-        # the backtrack hits level 0, all branches were tried and thus its
-        # UNSAT.
-        self.flipped: List[bool] = []
-
     # Solving a CNF is done by propagating unit clauses and if none exists
     # currently, propagating a variable choosen by VSIDS. If all branches are
     # tried without succes -> UNSAT. If all variables are assigned without
@@ -63,12 +54,10 @@ class MySAT:
                 return "SAT"
 
             self.cnf.assign(x, True)
-            self.flipped.append(False)
 
     def backtrack(self, to_level: int) -> None:
         while len(self.cnf.trail) - 1 > to_level:
             self.cnf.backtrack()
-            self.flipped.pop()
 
     def analyze(self, conflict: int) -> Tuple[List[int], int]:
         conflict_clause = self.cnf.clauses[conflict]
