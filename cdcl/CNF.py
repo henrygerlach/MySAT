@@ -46,7 +46,7 @@ class CNF:
     # of another model
     #
     def reset(self) -> None:
-        self.assignments = [0] * (self.n_literals + 1)
+        self.assignments = [0] * (2 * self.n_literals + 1)
         self.trail = [[]]
 
         self.reason = [-1] * (self.n_literals + 1)
@@ -90,7 +90,10 @@ class CNF:
         else:
             self.trail[level].append(lit)
 
-        self.assignments[var] = 1 if lit > 0 else -1
+        value = 1 if lit > 0 else -1
+        self.assignments[var] = value
+        self.assignments[-var] = -value
+
         self.level[var] = level if level != -1 else len(self.trail) - 1
 
         self.reason[var] = reason
@@ -104,17 +107,11 @@ class CNF:
     def backtrack(self, to_level: int) -> None:
         while len(self.trail) - 1 > to_level:
             for lit in self.trail.pop():
-                self.assignments[abs(lit)] = 0
+                self.assignments[lit] = 0
+                self.assignments[-lit] = 0
 
                 # put unassigned vars back into the heap
                 self.heap.insert(abs(lit))
-
-    # Evaluate truth value of literal: Return 1 if lit is true, -1 if false
-    # and 0 if unassigned
-    #
-    def value(self, lit: int) -> int:
-        value = self.assignments[abs(lit)]
-        return value if lit > 0 else -value
 
     # Pick var for branching: VSIDS unassigned var with the highest acivity.
     # See more in Heap.py. Pick the phase according to the last assignments

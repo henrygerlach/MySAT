@@ -54,7 +54,7 @@ class MySAT:
 
             # no unassigned var left -> SAT
             if not x:
-                self.models.append(self.cnf.assignments[1:])
+                self.models.append(self.cnf.assignments[1 : self.cnf.n_literals + 1])
                 return "SAT"
 
             self.cnf.assign(x, True)
@@ -83,14 +83,14 @@ class MySAT:
 
                 # case 1: other watched is true, so continue
                 #
-                if self.cnf.value(clause[0]) == 1:
+                if self.cnf.assignments[clause[0]] == 1:
                     i += 1
                     continue
 
                 # case 2: search some other non-false literal in clause
                 #
                 for k in range(2, len(clause)):
-                    if self.cnf.value(clause[k]) != -1:
+                    if self.cnf.assignments[clause[k]] != -1:
                         # swap false lit with non-false
                         clause[1], clause[k] = clause[k], clause[1]
 
@@ -107,7 +107,7 @@ class MySAT:
                 # is unassigned, or conflict
                 #
                 else:
-                    if self.cnf.value(clause[0]) == -1:
+                    if self.cnf.assignments[clause[0]] == -1:
                         self.cnf.queue.clear()
                         self.cnf.heap.bump(clause)
                         return watchers[i]
