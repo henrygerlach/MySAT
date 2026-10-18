@@ -13,9 +13,10 @@ class MySAT:
         self.models: List[List[int]] = []
 
     # Solving a CNF is done by propagating unit clauses and if none exists
-    # currently, propagating a variable choosen by VSIDS. If all branches are
-    # tried without succes -> UNSAT. If all variables are assigned without
-    # conflict -> SAT.
+    # currently, propagating a variable choosen by VSIDS. On conflict add a
+    # learned clause to prevent the conflcit from occuring again. If all
+    # branches are tried without success -> UNSAT. If all variables are
+    # assigned without conflict -> SAT.
     #
     def solve(self) -> str:
         if not self.models:
@@ -28,15 +29,17 @@ class MySAT:
             for unit in units:
                 self.cnf.assign(unit)
 
-        # if models where found before, and another solve comes in to find
-        # another model. Handle the satisfying branch as conflict and search
-        # another branch.
+        # add blocking clause to block same model to be found again
         elif not self.block_model():
             return "UNSAT"
 
         while True:
             conflict = self.propagate()
 
+            # on conflict, if on decision level 0 => UNSAT, because clause
+            # forced unsatisfied by level 0 decisions. else learn clause,
+            # backjump, add learned clause and assign first UIP, to enter new
+            # search space
             if conflict >= 0:
                 if len(self.cnf.trail) == 1:
                     return "UNSAT"
@@ -46,6 +49,7 @@ class MySAT:
                 self.cnf.assign(learned[0], reason=self.cnf.n_clauses - 1)
                 continue
 
+            # pick var using VSIDS and phase saving
             x = self.cnf.pick()
 
             # no unassigned var left -> SAT
@@ -55,6 +59,71 @@ class MySAT:
 
             self.cnf.assign(x, True)
 
+    # Two watched literals: watch clause[0] and clause[1] form every clause.
+    # If either gets assigned to be false, an unassigned replacement is
+    # searched. if none exists, its either satisfied (other watched is true),
+    # a unit clause (other watched unassigned) or a conflict (other watched
+    # also false).
+    #
+    def propagate(self) -> int:
+        while self.cnf.queue:
+            false_lit = -self.cnf.queue.pop()
+
+            watchers = self.cnf.watches[false_lit + self.cnf.n_literals]
+            i = 0
+            while i < len(watchers):
+                clause = self.cnf.clauses[watchers[i]]
+
+                if clause[0] == false_lit:
+                    # if c[0] is false_lit, swap it to position 1
+                    clause[0], clause[1] = clause[1], clause[0]
+
+                # case 1: other watched is true, so continue
+                #
+                if self.cnf.value(clause[0]) == 1:
+                    i += 1
+                    continue
+
+                # case 2: search some other non-false literal in clause
+                #
+                for k in range(2, len(clause)):
+                    if self.cnf.value(clause[k]) != -1:
+                        # swap false lit with non-false
+                        clause[1], clause[k] = clause[k], clause[1]
+
+                        # remove clause from lit watch list and add to c[1]'s
+                        # watch list
+                        c = watchers[i]
+                        watchers[i] = watchers[-1]
+                        watchers.pop()
+                        self.cnf.watches[clause[1] + self.cnf.n_literals].append(c)
+
+                        break
+
+                # case 3: no replacement found, then either unit clause, when c[0]
+                # is unassigned, or conflict
+                #
+                else:
+                    if self.cnf.value(clause[0]) == -1:
+                        self.cnf.queue.clear()
+                        self.cnf.heap.bump(clause)
+                        return watchers[i]
+                    self.cnf.assign(clause[0], reason=watchers[i])
+                    i += 1
+
+        return -1
+
+    # On conflict, find learned clause to prevent the same conflict from
+    # occuring again. This is achieved by recursivly replacing literals
+    # assigned on the current decision level with their reason clause
+    # (excluding the literal itself), the clause that forced them, until only
+    # on literal in the new clause was assigned on the current level. This
+    # literal is the first UIP (unique implication point). Every assignment
+    # between the decision and the conflict has an assignment path including
+    # this literal. Backjumping then to the next highest decision level a
+    # literal of the learned clause was assigned, makes the learned clause
+    # instantly unit, forcing a new decision space.
+    #
     def analyze(self, conflict: int) -> Tuple[List[int], int]:
         conflict_clause = self.cnf.clauses[conflict]
         learned_clause: List[int] = conflict_clause.copy()
@@ -110,60 +179,6 @@ class MySAT:
         return learned_clause, self.cnf.level[abs(learned_clause[1])] if len(
             learned_clause
         ) > 1 else 0
-
-    # Two watched literals: watch clause[0] and clause[1] form every clause.
-    # If either gets assigned to be false, an unassigned replacement is
-    # searched. if none exists, its either satisfied (other watched is true),
-    # a unit clause (other watched unassigned) or a conflict (other watched
-    # also false).
-    #
-    def propagate(self) -> int:
-        while self.cnf.queue:
-            false_lit = -self.cnf.queue.pop()
-
-            watchers = self.cnf.watches[false_lit + self.cnf.n_literals]
-            i = 0
-            while i < len(watchers):
-                clause = self.cnf.clauses[watchers[i]]
-
-                if clause[0] == false_lit:
-                    # if c[0] is false_lit, swap it to position 1
-                    clause[0], clause[1] = clause[1], clause[0]
-
-                # case 1: other watched is true, so continue
-                #
-                if self.cnf.value(clause[0]) == 1:
-                    i += 1
-                    continue
-
-                # case 2: search some other non-false literal in clause
-                #
-                for k in range(2, len(clause)):
-                    if self.cnf.value(clause[k]) != -1:
-                        # swap false lit with non-false
-                        clause[1], clause[k] = clause[k], clause[1]
-
-                        # remove clause from lit watch list and add to c[1]'s
-                        # watch list
-                        c = watchers[i]
-                        watchers[i] = watchers[-1]
-                        watchers.pop()
-                        self.cnf.watches[clause[1] + self.cnf.n_literals].append(c)
-
-                        break
-
-                # case 3: no replacement found, then either unit clause, when c[0]
-                # is unassigned, or conflict
-                #
-                else:
-                    if self.cnf.value(clause[0]) == -1:
-                        self.cnf.queue.clear()
-                        self.cnf.heap.bump(clause)
-                        return watchers[i]
-                    self.cnf.assign(clause[0], reason=watchers[i])
-                    i += 1
-
-        return -1
 
     # If models already found, add blocking clause blocking all decisions made
     # on the way towards the model, forcing new decisions. By backtracking on
