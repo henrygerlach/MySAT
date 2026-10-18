@@ -35,7 +35,7 @@ class MySAT:
             return "UNSAT"
 
         while True:
-            conflict = self.propagate(self.cnf)
+            conflict = self.propagate()
 
             if conflict >= 0:
                 if len(self.cnf.trail) == 1:
@@ -117,15 +117,14 @@ class MySAT:
     # a unit clause (other watched unassigned) or a conflict (other watched
     # also false).
     #
-    @staticmethod
-    def propagate(cnf: CNF) -> int:
-        while cnf.queue:
-            false_lit = -cnf.queue.pop()
+    def propagate(self) -> int:
+        while self.cnf.queue:
+            false_lit = -self.cnf.queue.pop()
 
-            watchers = cnf.watches[false_lit + cnf.n_literals]
+            watchers = self.cnf.watches[false_lit + self.cnf.n_literals]
             i = 0
             while i < len(watchers):
-                clause = cnf.clauses[watchers[i]]
+                clause = self.cnf.clauses[watchers[i]]
 
                 if clause[0] == false_lit:
                     # if c[0] is false_lit, swap it to position 1
@@ -133,14 +132,14 @@ class MySAT:
 
                 # case 1: other watched is true, so continue
                 #
-                if cnf.value(clause[0]) == 1:
+                if self.cnf.value(clause[0]) == 1:
                     i += 1
                     continue
 
                 # case 2: search some other non-false literal in clause
                 #
                 for k in range(2, len(clause)):
-                    if cnf.value(clause[k]) != -1:
+                    if self.cnf.value(clause[k]) != -1:
                         # swap false lit with non-false
                         clause[1], clause[k] = clause[k], clause[1]
 
@@ -149,7 +148,7 @@ class MySAT:
                         c = watchers[i]
                         watchers[i] = watchers[-1]
                         watchers.pop()
-                        cnf.watches[clause[1] + cnf.n_literals].append(c)
+                        self.cnf.watches[clause[1] + self.cnf.n_literals].append(c)
 
                         break
 
@@ -157,11 +156,11 @@ class MySAT:
                 # is unassigned, or conflict
                 #
                 else:
-                    if cnf.value(clause[0]) == -1:
-                        cnf.queue.clear()
-                        cnf.heap.bump(clause)
+                    if self.cnf.value(clause[0]) == -1:
+                        self.cnf.queue.clear()
+                        self.cnf.heap.bump(clause)
                         return watchers[i]
-                    cnf.assign(clause[0], reason=watchers[i])
+                    self.cnf.assign(clause[0], reason=watchers[i])
                     i += 1
 
         return -1
