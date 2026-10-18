@@ -44,7 +44,7 @@ class MySAT:
             # backjump, add learned clause and assign first UIP, to enter new
             # search space
             if conflict >= 0:
-                if len(cnf.trail) == 1:
+                if not cnf.trail_starts:
                     self.ret = "UNSAT"
                     return "UNSAT"
                 learned, to_level = self.analyze(conflict)
@@ -76,8 +76,10 @@ class MySAT:
     def propagate(self) -> int:
         cnf = self.cnf
 
-        while cnf.queue:
-            false_lit = -cnf.queue.pop()
+        # FIFO: propagate the trail from qhead in assignment order
+        while cnf.qhead < len(cnf.trail):
+            false_lit = -cnf.trail[cnf.qhead]
+            cnf.qhead += 1
 
             watchers = cnf.watches[false_lit + cnf.n_literals]
             i = 0
@@ -115,7 +117,7 @@ class MySAT:
                 #
                 else:
                     if cnf.assignments[clause[0]] == -1:
-                        cnf.queue.clear()
+                        cnf.qhead = len(cnf.trail)
                         return watchers[i]
                     cnf.assign(clause[0], reason=watchers[i])
                     i += 1
@@ -127,7 +129,7 @@ class MySAT:
     #
     def analyze(self, conflict: int) -> Tuple[List[int], int]:
         cnf = self.cnf
-        cur_level = len(cnf.trail) - 1
+        cur_level = len(cnf.trail_starts)
 
         seen = cnf.seen
         marked: List[int] = []
@@ -135,7 +137,7 @@ class MySAT:
         learned: List[int] = [0]
         counter = 0
         clause: List[int] = cnf.clauses[conflict]
-        i = len(cnf.trail[-1])
+        i = len(cnf.trail)
 
         while True:
             # Step 1: Take the literals of clause (initially conflict clause)
@@ -163,10 +165,10 @@ class MySAT:
             # literal and looking for the next literal that is marked seen
             #
             i -= 1
-            while not seen[abs(cnf.trail[cur_level][i])]:
+            while not seen[abs(cnf.trail[i])]:
                 i -= 1
 
-            pending = cnf.trail[cur_level][i]
+            pending = cnf.trail[i]
             counter -= 1
 
             # Step 3: Is pending the only literal left? If yes, pending is the
@@ -186,6 +188,10 @@ class MySAT:
         # setting learned[0] to negated first UIP
         learned[0] = -pending
 
+        # unmark all seen variables for next analyze run
+        for var in marked:
+            seen[var] = False
+
         # if learned clause is unit, it should backtrack to level 0
         if len(learned) == 1:
             return learned, 0
@@ -201,10 +207,6 @@ class MySAT:
                 level_max = level
         learned[1], learned[i_max] = learned[i_max], learned[1]
 
-        # unmark all seen variables for next analyze run
-        for var in marked:
-            seen[var] = False
-
         return learned, cnf.level[abs(learned[1])]
 
     # If models already found, add blocking clause blocking all decisions made
@@ -215,7 +217,7 @@ class MySAT:
 
         # create blocking clause from the negated decision that lead to the
         # last model
-        blocking = [-cnf.trail[level][0] for level in range(len(cnf.trail) - 1, 0, -1)]
+        blocking = [-cnf.trail[start] for start in reversed(cnf.trail_starts)]
 
         # model was found on level 0, thus there is no other model
         if not blocking:
@@ -223,7 +225,7 @@ class MySAT:
 
         # backtrack one level, add the blocking clause and assign the first
         # literal with its negated latest decision to force a new search space
-        cnf.backtrack(len(cnf.trail) - 2)
+        cnf.backtrack(len(cnf.trail_starts) - 1)
         cnf.add_clause(blocking)
         if len(blocking) > 1:
             cnf.assign(blocking[0], reason=cnf.n_clauses - 1)
