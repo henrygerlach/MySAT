@@ -6,12 +6,26 @@ from typing import List, Tuple
 from CNF import CNF
 
 
+# restart constants
+ALPHA_FAST = 1 / 32
+ALPHA_SLOW = 1e-5
+RESTART_MARGIN = 1.1
+RESTART_INT = 2
+
+
 class MySAT:
     def __init__(self, input_path: str):
         self.cnf: CNF = CNF(input_path)
 
         self.models: List[List[int]] = []
         self.ret: str | None = None
+
+        # restart vars
+        self.biased_fast: float = 0.0
+        self.biased_slow: float = 0.0
+        self.exp_fast: float = 1.0
+        self.exp_slow: float = 1.0
+        self.conflicts_since_restart: int = 0
 
     # Solving a CNF is done by propagating unit clauses and if none exists
     # currently, propagating a variable choosen by VSIDS. On conflict add a
@@ -47,11 +61,17 @@ class MySAT:
                 if not cnf.trail_starts:
                     self.ret = "UNSAT"
                     return "UNSAT"
-                learned, to_level = self.analyze(conflict)
+
+                learned, to_level, lbd = self.analyze(conflict)
+
                 cnf.backtrack(to_level)
                 cnf.add_clause(learned)
+
                 if len(learned) > 1:
                     cnf.assign(learned[0], reason=cnf.n_clauses - 1)
+
+                self.restart(lbd)
+
                 continue
 
             # pick var using VSIDS and phase saving
@@ -127,7 +147,7 @@ class MySAT:
     # On conflict, find learned clause to prevent the same conflict from
     # occuring again.
     #
-    def analyze(self, conflict: int) -> Tuple[List[int], int]:
+    def analyze(self, conflict: int) -> Tuple[List[int], int, int]:
         cnf = self.cnf
         cur_level = len(cnf.trail_starts)
 
@@ -192,9 +212,13 @@ class MySAT:
         for var in marked:
             seen[var] = False
 
+        # calculate lbd (literal block distance) - # of distinct levels in
+        # learned clause
+        lbd = len({cnf.level[abs(lit)] for lit in learned})
+
         # if learned clause is unit, it should backtrack to level 0
         if len(learned) == 1:
-            return learned, 0
+            return learned, 0, lbd
 
         # swap the literal with the second highest assignment level to
         # position 1
@@ -207,7 +231,37 @@ class MySAT:
                 level_max = level
         learned[1], learned[i_max] = learned[i_max], learned[1]
 
-        return learned, cnf.level[abs(learned[1])]
+        return learned, cnf.level[abs(learned[1])], lbd
+
+    # If the most recent learned clauses are worse than the long-term average,
+    # restart, as the solver is stuck in an unproductive search space. For this
+    # the solver keeps two moving averages `ema_fast` and `ema_slow` and
+    # checks if `ema_fast` is larger than `ema_slow` times some diff factor.
+    # If so restart the search. This logic needs some kind of correction, as
+    # the solver would otherwise restart instantly as `ema_fast` grows much
+    # faster than `ema_slow` initially. This is implemented using a bias
+    # correction, at the example of CaDiCaL, by dividing each ema by
+    # `1 - (1 - α) ^ n`, where n is the number of conflicts.
+    #
+    def restart(self, lbd: int) -> None:
+        self.conflicts_since_restart += 1
+
+        self.biased_fast += ALPHA_FAST * (lbd - self.biased_fast)
+        self.biased_slow += ALPHA_SLOW * (lbd - self.biased_slow)
+
+        # this is `(1 - α) ^ n` implemented incrementaly
+        self.exp_fast *= 1 - ALPHA_FAST
+        self.exp_slow *= 1 - ALPHA_SLOW
+
+        ema_fast = self.biased_fast / (1 - self.exp_fast)
+        ema_slow = self.biased_slow / (1 - self.exp_slow)
+
+        if (
+            self.conflicts_since_restart >= RESTART_INT
+            and ema_fast > RESTART_MARGIN * ema_slow
+        ):
+            self.cnf.backtrack(0)
+            self.conflicts_since_restart = 0
 
     # If models already found, add blocking clause blocking all decisions made
     # on the way towards the model, forcing new decisions.
