@@ -65,10 +65,7 @@ class MySAT:
                 learned, to_level, lbd = self.analyze(conflict)
 
                 cnf.backtrack(to_level)
-                cnf.add_clause(learned)
-
-                if len(learned) > 1:
-                    cnf.assign(learned[0], reason=cnf.n_clauses - 1)
+                cnf.add_asserting_clause(learned)
 
                 self.restart(lbd)
 
@@ -280,9 +277,7 @@ class MySAT:
         # backtrack one level, add the blocking clause and assign the first
         # literal with its negated latest decision to force a new search space
         cnf.backtrack(len(cnf.trail_starts) - 1)
-        cnf.add_clause(blocking)
-        if len(blocking) > 1:
-            cnf.assign(blocking[0], reason=cnf.n_clauses - 1)
+        cnf.add_asserting_clause(blocking)
 
         return True
 

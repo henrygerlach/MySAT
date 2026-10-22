@@ -15,7 +15,7 @@ class CNF:
         self.qhead: int = 0
         self.watches: List[List[int]] = []
 
-        # VSIDS + Phase saving
+        # VSIDS + phase saving
         self.heap: Heap
         self.phase: List[int] = []
 
@@ -72,7 +72,7 @@ class CNF:
             for lit in clause[:2]:
                 self.watches[lit + self.n_literals].append(i)
 
-    def add_clause(self, clause: List[int]) -> None:
+    def add_asserting_clause(self, clause: List[int]) -> None:
         self.clauses.append(clause)
         self.n_clauses += 1
 
@@ -82,6 +82,9 @@ class CNF:
         else:
             for lit in clause[:2]:
                 self.watches[lit + self.n_literals].append(self.n_clauses - 1)
+
+            # only assign the first watched literal, as its the only one unassigned
+            self.assign(clause[0], reason=self.n_clauses - 1)
 
     # Add assignment to global assignment array and trail (which also queues
     # it for propagation) and save the phase for the next decision (phase
