@@ -239,7 +239,11 @@ if __name__ == "__main__":
     solves = 3
     total_time = 0.0
 
-    f = open(sys.argv[2], "w")
+    out = "outputs/out.csv"
+    if len(sys.argv) > 2:
+        out = sys.argv[2]
+
+    f = open(out, "w")
     f.write("N, Status, Time (s), Total Time (s)\n")
     for i in range(1, solves + 1):
         start = time.perf_counter()
