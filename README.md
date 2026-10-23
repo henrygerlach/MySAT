@@ -114,3 +114,18 @@ After each conflict, update both with `ema += α * (lbd - ema)`. Then restart if
 
 * EMA warm-up: both averages start at 0, so early values are biased low. Either skip restarts for the first ~50 conflicts, or use bias correction as CaDiCaL does: divide by 1 - (1-α)^n.
 * Minimum interval: CaDiCaL's restartint is 2 conflicts. Without some minimum, the solver can restart on every conflict.
+
+### Reduction
+
+On a hard instance, with many conflicts, learned clauses slow down propagation and fill up memory over time, even though some of them rarly or never fire during propagation. Thus regular learned clause deletion can speed up the solving. 
+
+In practice every `300 * sqrt(n)` (n is the number of total conflicts) conflicts the reduction is performed.
+
+Before deleting anything the learned clauses are first filtered for candidates. A learned clause is a candidate if:
+1. it is not the reason of some variables assignment,
+2. its LBD score is not less or equal to 2, which makes it part of the core, that fire regularly, and
+3. its not been used since last reduction.
+
+After selecting cadidates, the solver deletes 50% of them, starting with the ones with the highest LBD score and tie breacking with the clause length.
+
+Deletion is implemented by simply setting the clause to []. This is a memory trade for runtime gains, as real deletion would create a large overhead.
