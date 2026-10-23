@@ -12,6 +12,10 @@ ALPHA_SLOW = 1e-5
 RESTART_MARGIN = 1.1
 RESTART_INT = 2
 
+# reduce constants
+REDUCE_INT = 300
+REDUCE_TARGET = 50
+
 
 class MySAT:
     def __init__(self, input_path: str):
@@ -27,6 +31,10 @@ class MySAT:
         self.exp_slow: float = 1.0
         self.conflicts_since_restart: int = 0
 
+        # reduce vars
+        self.reductions: int = 0
+        self.conflict_limit: int = REDUCE_INT
+
     # Solving a CNF is done by propagating unit clauses and if none exists
     # currently, propagating a variable choosen by VSIDS. On conflict add a
     # learned clause to prevent the conflcit from occuring again. If all
@@ -36,18 +44,24 @@ class MySAT:
     def solve(self) -> str:
         cnf = self.cnf
 
-        if self.ret != "UNSAT":
+        if self.ret is None:
             # resolve all unit clauses, as two watched literals doesnt work on them
             units = set(clause[0] for clause in cnf.clauses if len(clause) == 1)
             # if both (l) and -(l) exist, the cnf is UNSAT
             if any(-u in units for u in units):
-                return "UNSAT"
+                self.ret = "UNSAT"
+                return self.ret
             # assign units on decision level 0
             for unit in units:
                 cnf.assign(unit)
 
         # add blocking clause to block same model to be found again
-        elif not self.block_model():
+        elif self.ret == "SAT":
+            if not self.block_model():
+                return "UNSAT"
+
+        # if previous solve was UNSAT this one will be UNSAT too
+        else:
             return "UNSAT"
 
         while True:
@@ -60,14 +74,15 @@ class MySAT:
             if conflict >= 0:
                 if not cnf.trail_starts:
                     self.ret = "UNSAT"
-                    return "UNSAT"
+                    return self.ret
 
                 learned, to_level, lbd = self.analyze(conflict)
 
                 cnf.backtrack(to_level)
-                cnf.add_asserting_clause(learned)
+                cnf.add_asserting_clause(learned, lbd)
 
                 self.restart(lbd)
+                self.reduce()
 
                 continue
 
@@ -77,7 +92,8 @@ class MySAT:
             # no unassigned var left -> SAT
             if not x:
                 self.models.append(cnf.assignments[1 : cnf.n_literals + 1])
-                return "SAT"
+                self.ret = "SAT"
+                return self.ret
 
             cnf.assign(x, True)
 
@@ -154,8 +170,11 @@ class MySAT:
         learned: List[int] = [0]
         counter = 0
         clause: List[int] = cnf.clauses[conflict]
-        i = len(cnf.trail)
 
+        # recompute lbd and used tier if learned
+        cnf.rank(conflict, clause)
+
+        i = len(cnf.trail)
         while True:
             # Step 1: Take the literals of clause (initially conflict clause)
             #
@@ -197,7 +216,11 @@ class MySAT:
             # Step 4: Set the reason clause of pending to the next clause to
             # resolve
             reason = cnf.reason[abs(pending)]
-            clause = cnf.clauses[reason if reason else 0]
+            reason = reason if reason else 0
+            clause = cnf.clauses[reason]
+
+            # recompute lbd and used tier if learned
+            cnf.rank(reason, clause)
 
         # decay VSIDS activity scores once per conflict
         cnf.heap.decay()
@@ -211,7 +234,7 @@ class MySAT:
 
         # calculate lbd (literal block distance) - # of distinct levels in
         # learned clause
-        lbd = len({cnf.level[abs(lit)] for lit in learned})
+        lbd = cnf.lbd(learned)
 
         # if learned clause is unit, it should backtrack to level 0
         if len(learned) == 1:
@@ -259,6 +282,47 @@ class MySAT:
         ):
             self.cnf.backtrack(0)
             self.conflicts_since_restart = 0
+
+    def reduce(self) -> None:
+        self.conflict_limit -= 1
+
+        # only reduce if conflict_limit is reached
+        if self.conflict_limit > 0:
+            return
+
+        self.reductions += 1
+
+        cnf = self.cnf
+
+        # find still locked clauses, because backtrack doesnt clear reasons
+        locked = {cnf.reason[abs(lit)] for lit in cnf.trail}
+
+        # find candidates
+        candidates: List[int] = []
+        for i in cnf.learned_idx:
+            # analyze still needs it or tier 1 learned clause
+            if i in locked or cnf.lbds[i] <= 2:
+                continue
+
+            # age flag and used since last reduce -> survives
+            if cnf.used[i] > 0:
+                cnf.used[i] -= 1
+                continue
+
+            candidates.append(i)
+
+        candidates.sort(key=lambda x: (cnf.lbds[x], len(cnf.clauses[x])), reverse=True)
+        for candidate in candidates[: (len(candidates) * REDUCE_TARGET) // 100]:
+            cnf.clauses[candidate] = []
+
+        # rebuild watch lists
+        cnf.build_watch_list()
+
+        # filter down to the clauses that still exist
+        cnf.learned_idx = [i for i in cnf.learned_idx if cnf.clauses[i]]
+
+        # reset the conflict limit
+        self.conflict_limit = int(REDUCE_INT * self.reductions**0.5)
 
     # If models already found, add blocking clause blocking all decisions made
     # on the way towards the model, forcing new decisions.

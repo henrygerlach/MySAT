@@ -5,6 +5,7 @@ from Heap import Heap
 
 class CNF:
     def __init__(self, input_path: str) -> None:
+        # deleted clauses are replaced by [], so indices stay stable
         self.clauses: List[List[int]] = []
 
         self.n_clauses: int = 0
@@ -28,7 +29,14 @@ class CNF:
         self.level: List[int] = []
         # global seen list for analyze method, such that it is not
         # reinstantiated every conflict
-        seen: List[bool] = []  # type: ignore  # noqa: F841
+        self.seen: List[bool] = []
+
+        # reduction
+        # if >= 1 then learned clause, else original or blocking clause
+        self.lbds: List[int] = []
+        # 2 if clause has lbd <= 6, else 1.
+        self.used: List[int] = []
+        self.learned_idx: List[int] = []
 
         self.read_cnf(input_path)
         self.reset()
@@ -47,6 +55,10 @@ class CNF:
             for line in f.readlines():
                 lits = line.split(" ")[:-1]
                 self.clauses.append([int(lit) for lit in lits])
+
+        self.lbds = [0] * self.n_clauses
+        self.used = [0] * self.n_clauses
+        self.learned_idx = []
 
     # Reset the search state, for initialization or to prepare for the search
     # of another model
@@ -67,14 +79,22 @@ class CNF:
         self.phase = [-1] * (self.n_literals + 1)
 
         self.qhead = 0
+        self.build_watch_list()
+
+    def build_watch_list(self) -> None:
         self.watches = [[] for _ in range(2 * self.n_literals + 1)]
         for i, clause in enumerate(self.clauses):
             for lit in clause[:2]:
                 self.watches[lit + self.n_literals].append(i)
 
-    def add_asserting_clause(self, clause: List[int]) -> None:
+    def add_asserting_clause(self, clause: List[int], lbd: int = 0) -> None:
         self.clauses.append(clause)
         self.n_clauses += 1
+
+        self.lbds.append(lbd)
+        self.used.append(self.uses(lbd))
+        if lbd >= 1:
+            self.learned_idx.append(self.n_clauses - 1)
 
         if len(clause) == 1:
             # callers backtrack to level 0 before adding a unit clause
@@ -146,11 +166,32 @@ class CNF:
         self.clauses.append(blocking_clause)
         self.n_clauses += 1
 
+    ##### HELPER METHODS #####
+
+    def lbd(self, clause: List[int]) -> int:
+        return len({self.level[abs(lit)] for lit in clause})
+
+    def uses(self, lbd: int) -> int:
+        return 0 if not lbd else 2 if lbd <= 6 else 1
+
+    def rank(self, clause_idx: int, clause: List[int]) -> None:
+        # return early if its and original or blocking clause or is already
+        # tier 1
+        if self.lbds[clause_idx] == 0 or self.lbds[clause_idx] <= 2:
+            return
+
+        lbd = self.lbd(clause)
+        if lbd < self.lbds[clause_idx]:
+            self.lbds[clause_idx] = lbd
+        self.used[clause_idx] = self.uses(self.lbds[clause_idx])
+
     ##### PRINTING METHODS #####
 
     def print(self) -> None:
         print(f"p cnf {self.n_literals} {self.n_clauses}")
         for clause in self.clauses:
+            if not clause:
+                continue
             for lit in clause:
                 print(f"{lit} ", end="")
             print("0")
