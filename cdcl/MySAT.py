@@ -283,6 +283,8 @@ class MySAT:
             self.cnf.backtrack(0)
             self.conflicts_since_restart = 0
 
+    # Regularly delete the worst learned clauses
+    #
     def reduce(self) -> None:
         self.conflict_limit -= 1
 
