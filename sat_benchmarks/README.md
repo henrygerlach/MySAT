@@ -1,7 +1,7 @@
 # Test CNFs for DPLL
 
 All answers were verified with CaDiCaL. Each file also states its expected result in a `c expected:` comment line.
-"Naive DPLL" = the iterative version from dpll.py (rescans all clauses on every propagation round, branches on the lowest unassigned variable, true first).
+"Naive DPLL" = the iterative version from dpll/DPLL.py (rescans all clauses on every propagation round, branches on the lowest unassigned variable, true first).
 
 | File | Vars | Clauses | Expected | Naive DPLL (Python) |
 |---|---|---|---|---|
