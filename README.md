@@ -4,7 +4,7 @@
 
 The SAT (Satisfiability) Problem is one of the most known problems in computer science. Even though it is not that hard to understand it is quite difficult to solve efficiently, especially on large instances. 
 
-The problem is especially important as it was the first problem proved to be *NP-complete* (1971 - Cook-Levin-Theorem), which means that all problems which have an algorithm solving it in polynomial (P) or non-polynomial (NP) time are reducible to this problem. Reducible means, that there exists an algorithm that transforms an instance of a problem into an instance of another problem in polynomial time and that the solutions of the reduced to instance provide solutions for the original problem. For example a Sudoku grid can be transformed into a SAT formula in polynomial time. Solving this formula provides solutions for the Sudoku grid.
+The problem is especially important as it was the first problem proved to be *NP-complete* (1971 - Cook-Levin-Theorem), which means that it is in NP and every other problem in NP is reducible to it. Reducible means, that there exists an algorithm that transforms an instance of a problem into an instance of another problem in polynomial time and that the solutions of the reduced to instance provide solutions for the original problem. For example a Sudoku grid can be transformed into a SAT formula in polynomial time. Solving this formula provides solutions for the Sudoku grid.
 
 A SAT or CNF (conjunctive normal form) formula consists of AND connected clauses, where each clause is an OR of literals (`x` or `¬x`). CNF formulas are stored in files with the DIMACS format. There variables are numbers, a negative number means a negated literal, and `0` ends a clause:
 
@@ -132,4 +132,4 @@ Deletion is implemented by simply setting the clause to []. This is a memory tra
 
 ## License and Third-Party Benchmarks
 
-The code is released under the [MIT License](LICENSE). The CNF files in `inputs/` (`real-world.cnf`, `karatsuba.sk_7_41.cnf`, `enqueueSeqSK.sk_10_42.cnf`) are third-party benchmark instances, not written by me, and remain under their original authors' terms.
+The code is released under the [MIT License](LICENSE). The `inputs/` directory (git-ignored) holds third-party benchmark instances, which are not part of this repo and remain under their original authors' terms.
